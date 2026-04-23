@@ -81,7 +81,7 @@ show_workspace_profiles_menu() {
 
 # Redefine main menu to include the Workspace profiles entry (after Setup).
 show_main_menu() {
-  go_to_menu "$(menu "Go" "󰀻  Apps\n󰧑  Learn\n󱓞  Trigger\n  Style\n  Setup\n󱂬  Workspace profiles\n󰉉  Install\n󰭌  Remove\n  Update\n  About\n  System")"
+  go_to_menu "$(menu "Go" "󰀻  Apps\n󰧑  Learn\n󱓞  Trigger\n  Style\n  Setup\n󱂬  Workspace profiles\n󰉉  Install\n󰭌  Remove\n  Update\n  About\n  System")"
 }
 
 # Redefine dispatcher to add our case. All original top-level entries
