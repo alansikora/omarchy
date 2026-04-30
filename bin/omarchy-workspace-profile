@@ -197,7 +197,7 @@ rewrite_style_collapse() {
   current_accent=$(profile_color "$current")
 
   python3 - "$WAYBAR_STYLE" "$current" "$WS_PER_PROFILE" "$STYLE_BEGIN" "$STYLE_END" "$profiles_csv" "$current_accent" <<'PY'
-import sys, re
+import sys, re, fcntl
 path, cur, n_str, begin, end, profiles_csv, current_accent = sys.argv[1:8]
 n = int(n_str)
 profiles = [p.strip() for p in profiles_csv.split(',') if p.strip()]
@@ -241,15 +241,20 @@ else:
 
 block = logo_rule + collapse
 
-with open(path) as f:
-    css = f.read()
+# Exclusive flock serializes concurrent invocations (e.g. two profile-switch
+# clicks landing in quick succession). Without it, two read-modify-write
+# passes can interleave their O_TRUNC writes and leave orphan tail bytes.
 pattern = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.DOTALL)
 managed = f"{begin}\n{block}{end}"
-if pattern.search(css):
-    css = pattern.sub(managed, css, count=1)
-else:
-    css = css.rstrip() + "\n\n" + managed + "\n"
-with open(path, "w") as f:
+with open(path, "r+") as f:
+    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+    css = f.read()
+    if pattern.search(css):
+        css = pattern.sub(managed, css, count=1)
+    else:
+        css = css.rstrip() + "\n\n" + managed + "\n"
+    f.seek(0)
+    f.truncate()
     f.write(css)
 PY
 }
@@ -259,16 +264,18 @@ clear_style_managed() {
   # to the stock styling: no logo tint, no collapsed workspace buttons.
   [[ -f "$WAYBAR_STYLE" ]] || return 0
   python3 - "$WAYBAR_STYLE" "$STYLE_BEGIN" "$STYLE_END" <<'PY'
-import sys, re
+import sys, re, fcntl
 path, begin, end = sys.argv[1:4]
-with open(path) as f:
-    css = f.read()
 pattern = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.DOTALL)
 managed = f"{begin}\n{end}"
-if pattern.search(css):
-    css = pattern.sub(managed, css, count=1)
-with open(path, "w") as f:
-    f.write(css)
+with open(path, "r+") as f:
+    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+    css = f.read()
+    if pattern.search(css):
+        css = pattern.sub(managed, css, count=1)
+        f.seek(0)
+        f.truncate()
+        f.write(css)
 PY
 }
 
@@ -301,17 +308,19 @@ sync_mako_styles() {
   done < <(list_profiles)
 
   python3 - "$MAKO_CONFIG" "$MAKO_BEGIN" "$MAKO_END" "$block" <<'PY'
-import sys, re
+import sys, re, fcntl
 path, begin, end, block = sys.argv[1:5]
-with open(path) as f:
-    cfg = f.read()
 pattern = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.DOTALL)
 managed = f"{begin}\n{block}{end}"
-if pattern.search(cfg):
-    cfg = pattern.sub(managed, cfg, count=1)
-else:
-    cfg = cfg.rstrip() + "\n\n" + managed + "\n"
-with open(path, "w") as f:
+with open(path, "r+") as f:
+    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+    cfg = f.read()
+    if pattern.search(cfg):
+        cfg = pattern.sub(managed, cfg, count=1)
+    else:
+        cfg = cfg.rstrip() + "\n\n" + managed + "\n"
+    f.seek(0)
+    f.truncate()
     f.write(cfg)
 PY
   makoctl reload >/dev/null 2>&1 || true
@@ -322,16 +331,18 @@ clear_mako_managed() {
   # theme's default styling.
   [[ -f "$MAKO_CONFIG" ]] || return 0
   python3 - "$MAKO_CONFIG" "$MAKO_BEGIN" "$MAKO_END" <<'PY'
-import sys, re
+import sys, re, fcntl
 path, begin, end = sys.argv[1:4]
-with open(path) as f:
-    cfg = f.read()
 pattern = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.DOTALL)
 managed = f"{begin}\n{end}"
-if pattern.search(cfg):
-    cfg = pattern.sub(managed, cfg, count=1)
-with open(path, "w") as f:
-    f.write(cfg)
+with open(path, "r+") as f:
+    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+    cfg = f.read()
+    if pattern.search(cfg):
+        cfg = pattern.sub(managed, cfg, count=1)
+        f.seek(0)
+        f.truncate()
+        f.write(cfg)
 PY
   makoctl reload >/dev/null 2>&1 || true
 }
